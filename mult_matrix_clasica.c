@@ -6,11 +6,11 @@ int main ()
 {
     time_t t;
     int **ptr1, **ptr2, **ptr3;
-    int N, col1, row2, col2;
+    int N=1000, col1, row2, col2;
     srand ((unsigned) time (&t));
     int i, j, k;
-    printf ("\nValor de N : ");
-    scanf ("%d", &N);
+    //printf ("\nValor de N : ");
+    //scanf ("%d", &N);
     ptr1 = (int **) malloc (sizeof (int *) * N);
     ptr2 = (int **) malloc (sizeof (int *) * N);
     ptr3 = (int **) malloc (sizeof (int *) * N);
