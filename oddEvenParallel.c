@@ -1,187 +1,150 @@
-#include <stdio.h>
+#include <iostream>
 #include <stdlib.h>
 #include <mpi.h>
 
-/* the number of data elements in each process */
-#define N 10
+using namespace std;
 
+int Compare(const void*, const void*);
+int CPartner(int, int, int);
+void Merge_low(int[], int[], int);
+void Merge_high(int[], int[], int);
 
-/* initialize the data to random values based on rank (so they're different) */
-void init(int* data, int rank) {
-  int i;
-  srand(rank);
-  for (i = 0; i < N; i++) {
-    data[i] = rand( ) % 100;
-  }
+int main(int argc, char* argv[]){
+	srand(time(NULL));
+	int n = atoi(argv[1]);
+
+	int array[n], comm_sz = 0, my_rank = 0,local_n = 0, fase = 0, partner = 0;
+
+	int* local_arr;
+	int* local_brr;
+
+	MPI_Init(nullptr, nullptr);
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+
+	local_arr = (int*) malloc(sizeof(int)*(n/comm_sz));
+	local_brr = (int*) malloc(sizeof(int)*(n/comm_sz));
+
+	if(my_rank == 0){
+		cout<<"Array: ";
+		for (int i = 0; i < n; ++i) {
+			array[i] = rand() % 20;
+			cout<<array[i]<<"-";
+		}
+		cout<<endl;
+	}
+	
+    local_n = n/comm_sz;
+    // copia los elementos a los buffers de todos
+    // para compartir el array a todos
+	MPI_Scatter(array, local_n, MPI_INT, local_arr, local_n, MPI_INT, 0, MPI_COMM_WORLD);
+
+	qsort(local_arr, local_n, sizeof(int), Compare);
+
+	for(fase = 0; fase < comm_sz; ++fase){
+		partner = CPartner(fase, my_rank, comm_sz);
+		if(partner >= 0){
+			MPI_Sendrecv(local_arr, n/comm_sz, MPI_INT, partner, 0, local_brr, n/comm_sz, MPI_INT, partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+			if (my_rank < partner){ // companero intercambiado adelante
+				Merge_low(local_arr, local_brr, local_n);
+			}
+			else{   // companero intercambiado atras
+				Merge_high(local_arr, local_brr, local_n);
+			}
+		}
+	}
+
+	cout<<my_rank<<": ";
+	for (int i = 0; i < local_n; ++i) {
+		cout<<local_arr[i]<<"-";
+	}
+	cout<<endl;
+
+	MPI_Finalize();
+
+	return 0;
+
 }
 
-/* print the data to the screen */
-void print(int* data, int rank) {
-  int i;
-  printf("Process %d: ");
-  for (i = 0; i < N; i++) {
-    printf("%d ", data[i]);
-  }
-  printf("\n");
+int CPartner(int fase, int my_rank, int comm_sz){
+	int partner = 0;
+	if (fase % 2 == 0){
+		if (my_rank % 2 != 0)
+			partner = my_rank - 1;
+		else
+			partner = my_rank + 1;
+	}
+	else{
+		if (my_rank % 2 != 0)
+			partner = my_rank + 1;
+		else
+			partner = my_rank - 1;
+		if (partner == - 1 || partner == comm_sz){
+			partner = MPI_PROC_NULL;
+		}
+	}
+	return partner;
+}
+void Merge_low(int my_keys[],int recv_keys[], int local_n){
+
+	int m_i = 0,
+		r_i = 0,
+		t_i = 0;
+
+	int temp_keys[local_n];
+
+	while ( t_i < local_n ) {
+		if ( my_keys[m_i] <= recv_keys[r_i] ) {
+			temp_keys[t_i] = my_keys[m_i];
+			++m_i;
+			++t_i;
+		}
+		else{
+			temp_keys[t_i] = recv_keys[r_i];
+			++r_i;
+			++t_i;
+		}
+	}
+	for ( m_i = 0; m_i < local_n; ++m_i) {
+		my_keys[m_i] = temp_keys[m_i];
+	}
 }
 
-/* comparison function for qsort */
-int cmp(const void* ap, const void* bp) {
-  int a = * ((const int*) ap);
-  int b = * ((const int*) bp);
+int Compare(const void* a_p, const void* b_p) {
+	int a = *((int*)a_p);
+	int b = *((int*)b_p);
 
-  if (a < b) {
-    return -1;
-  } else if (a > b) {
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
-/* find the index of the largest item in an array */
-int max_index(int* data) {
-  int i, max = data[0], maxi = 0;
-
-  for (i = 1; i < N; i++) {
-    if (data[i] > max) {
-      max = data[i];
-      maxi = i;
-    }
-  }
-  return maxi;
-}
-
-/* find the index of the smallest item in an array */
-int min_index(int* data) {
-  int i, min = data[0], mini = 0;
-
-  for (i = 1; i < N; i++) {
-    if (data[i] < min) {
-      min = data[i];
-      mini = i;
-    }
-  }
-  return mini;
+	if (a < b)
+		return -1;
+	else if (a == b)
+		return 0;
+	else /* a > b */
+		return 1;
 }
 
 
-/* Ejecutamos odd/even sort */
-void parallel_sort(int* data, int rank, int size) {
-  int i;
+void Merge_high(int my_keys[],int recv_keys[], int local_n){
 
-  /* vector para comparar(partner) */
-  int other[N];
+	int m_i = local_n - 1,
+		r_i = local_n - 1,
+		t_i = local_n - 1;
 
-  //print(data, rank);
-  /* Se hará P phases , P es el num de Procesos */
-  for (i = 0; i < size; i++) {
-    /* sort local del Vector */
-    qsort(data, N, sizeof(int), &cmp);
+	int temp_keys[local_n];
 
-    /* encontrmoas el  partner según la phase */
-    int partener;
-
-    /* si es una phase par */
-    if (i % 2 == 0) {
-      /* si estamos en un proceso donde su id es par */
-      if (rank % 2 == 0) {
-        partener = rank + 1;
-      } else {
-        partener = rank - 1;
-      }
-    } else {
-      /* si es una phase impar */
-      if (rank % 2 == 0) {
-        partener = rank - 1;
-      } else {
-        partener = rank + 1;
-      }
-    }
-
-    /* si el partner es inválido no hay nada para hacer */
-    if (partener < 0 || partener >= size) {
-      continue;
-    }
-
-    /* Comunicación Bloqueante, los procesos pares envían y esperan a recibir
-     * evitando deadlocks */
-    /*Se envía la data de partner a partner y se almacena en other*/
-    if (rank % 2 == 0) {
-      MPI_Send(data, N, MPI_INT, partener, 0, MPI_COMM_WORLD);
-      MPI_Recv(other, N, MPI_INT, partener, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    } else {
-      MPI_Recv(other, N, MPI_INT, partener, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      MPI_Send(data, N, MPI_INT, partener, 0, MPI_COMM_WORLD);
-    }
-
-    /* now we need to merge data and other based on if we want smaller or larger ones */
-    if (rank < partener) {
-      /* keep smaller keys */
-      while (1) {
-        /* find the smallest one in the other array */
-        int mini = min_index(other);
-
-        /* find the largest one in out array */
-        int maxi = max_index(data);
-
-        /* if the smallest one in the other array is less than the largest in ours, swap them */
-        if (other[mini] < data[maxi]) {
-          int temp = other[mini];
-          other[mini] = data[maxi];
-          data[maxi] = temp;
-        } else {
-          /* else stop because the smallest are now in data */
-          break;
-        }
-      }
-    } else {
-      /* keep larger keys */
-      while (1) {
-        /* find the largest one in the other array */
-        int maxi = max_index(other);
-
-        /* find the largest one in out array */
-        int mini = min_index(data);
-
-        /* if the largest one in the other array is bigger than the smallest in ours, swap them */
-        if (other[maxi] > data[mini]) {
-          int temp = other[maxi];
-          other[maxi] = data[mini];
-          data[mini] = temp;
-        } else {
-          /* else stop because the largest are now in data */
-          break;
-        }
-      }
-    }
-  }
-}
-
-int main(int argc, char** argv) {
-  /*id procesos y tam del Vector */
-  int rank, size;
-
-  /* Vector a Ordenar */
-  int data[N];
-
-  /* initialize MPI */
-  MPI_Init(&argc, &argv);
-
-  /* get the rank (process id) and size (number of processes) */
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-  /* initialize the data */
-  init(data, rank);
-
-  /* Ejecutamos odd/even sort */
-  parallel_sort(data, rank, size);
-
-  /* imprimimos los datos */
-  print(data, rank);
-
-  /* quit MPI */
-  MPI_Finalize( );
-  return 0;
+	while ( t_i >= 0 ) {
+		if ( my_keys[m_i] >= recv_keys[r_i] ) {
+			temp_keys[t_i] = my_keys[m_i];
+			--m_i;
+			--t_i;
+		}
+		else{
+			temp_keys[t_i] = recv_keys[r_i];
+			--r_i;
+			--t_i;
+		}
+	}
+	for ( m_i = 0; m_i < local_n; ++m_i) {
+		my_keys[m_i] = temp_keys[m_i];
+	}
 }
