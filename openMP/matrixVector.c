@@ -9,7 +9,7 @@ int main(int argc, char* argv[]){
   int m,n,i,j;
   double **Matrix, *vector_int, *vector_res;
 
-  m=8; n=8000000;
+  m=8000000; n=8;
 
   Matrix = (double**) malloc(m*sizeof(double));
   vector_int = (double*) malloc(n*sizeof(double));

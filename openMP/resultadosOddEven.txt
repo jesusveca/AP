@@ -1,0 +1,3 @@
+									1			2			3			4
+Two parallel for directives		0.684331  	0.686210	0.942040 	0.996867
+Two for directives				1.415322 	0.853976	0.961496	0.890885

@@ -20,6 +20,7 @@ int main() {
    
    pieces = (final-inicio)/n;
    suma_g += (funcion(inicio) + funcion(final))/2.0;
+   
    #pragma omp parallel for schedule(static) default(none) \
       shared(inicio, pieces, n) private(i, x) \
       reduction(+: suma_g) num_threads(numero_threads)

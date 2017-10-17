@@ -5,7 +5,7 @@
 
 int numero_threads;
 
-void odd_even_sort(int vector_int[], int numero_elem){
+void odd_even_sort_second(int vector_int[], int numero_elem){
   int phase, iter, tempo;
 
   #pragma omp parallel num_threads(numero_threads) \
@@ -30,17 +30,21 @@ void odd_even_sort(int vector_int[], int numero_elem){
   }
 }
 
-int main(){
-  numero_threads = 17;
+int main(int argc, char* argv[]){
+  numero_threads = strtol(argv[1], NULL, 10);;
   int numero_elem, *vector_int, iter;  
-  numero_elem=2000;
+  numero_elem=100000;
   vector_int =  malloc(numero_elem*sizeof(int));
 
   for(iter = 0; iter < numero_elem; iter++)  // fill array
     vector_int[iter] = numero_elem-iter-1;
   
-  odd_even_sort(vector_int,numero_elem);
+  double inicio = omp_get_wtime();
+  
+  odd_even_sort_second(vector_int,numero_elem);
 
-  for(iter = 0; iter < numero_elem; iter++) printf("%d ", vector_int[iter]);  printf("\numero_elem");
+  printf("%f \n", omp_get_wtime()-inicio);
+  //for(iter = 0; iter < numero_elem; iter++) printf("%d ", vector_int[iter]);  printf("\numero_elem");
+  // double inicio = omp_get_wtime();
   return 0;
 }
